@@ -47,40 +47,25 @@ app.post("/v1/chat/completions", async (req, res) => {
       let firstChunk = true;
 
       for await (const chunk of streamResponse) {
-        if (firstChunk) {
-          const roleData = {
-            id: chatId,
-            object: "chat.completion.chunk",
-            created: Math.floor(Date.now() / 1000),
-            model: MODEL_NAME,
-            choices: [{ index: 0, delta: { role: "assistant" }, finish_reason: null }]
-          };
-          res.write(`data: ${JSON.stringify(roleData)}\n\n`);
-          firstChunk = false;
-        }
+        updateActivity();
 
-        if (chunk.message.content) {
-          fullContent += chunk.message.content;
-          const data = {
-            id: chatId,
-            object: "chat.completion.chunk",
-            created: Math.floor(Date.now() / 1000),
-            model: MODEL_NAME,
-            choices: [{ index: 0, delta: { content: chunk.message.content }, finish_reason: null }]
-          };
-          res.write(`data: ${JSON.stringify(data)}\n\n`);
-        }
+        const data = {
+          id: chatId,
+          object: "chat.completion.chunk",
+          created: Math.floor(Date.now() / 1000),
+          model: MODEL_NAME,
+          choices: [
+            {
+              index: 0,
+              delta: firstChunk ? { role: "assistant", content: chunk.message.content || "" } : { content: chunk.message.content || "" },
+              finish_reason: chunk.done ? "stop" : null
+            }
+          ]
+        };
 
-        if (chunk.done) {
-          const finalData = {
-            id: chatId,
-            object: "chat.completion.chunk",
-            created: Math.floor(Date.now() / 1000),
-            model: MODEL_NAME,
-            choices: [{ index: 0, delta: {}, finish_reason: "stop" }]
-          };
-          res.write(`data: ${JSON.stringify(finalData)}\n\n`);
-        }
+        res.write(`data: ${JSON.stringify(data)}\n\n`);
+        fullContent += (chunk.message.content || "");
+        firstChunk = false;
       }
 
       res.write("data: [DONE]\n\n");
