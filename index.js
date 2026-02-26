@@ -34,35 +34,41 @@ app.post("/v1/chat/completions", async (req, res) => {
     updateActivity();
 
     if (stream) {
+      const { messagesForChoice, userQuery } = await prepareOrchestration(messages);
+
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
 
-      const { messagesForChoice, userQuery } = await prepareOrchestration(messages);
       const streamResponse = await getChoiceStream(messagesForChoice);
 
       let fullContent = "";
       const chatId = `chatcmpl-${Date.now()}`;
+      let firstChunk = true;
 
       for await (const chunk of streamResponse) {
-        updateActivity(); // Keep-alive for idle timer while generating
-        fullContent += chunk.message.content;
+        updateActivity();
+
+        if (firstChunk) {
+          const roleData = {
+            id: chatId,
+            object: "chat.completion.chunk",
+            created: Math.floor(Date.now() / 1000),
+            model: MODEL_NAME,
+            choices: [{ index: 0, delta: { role: "assistant" }, finish_reason: null }]
+          };
+          res.write(`data: ${JSON.stringify(roleData)}\n\n`);
+          firstChunk = false;
+        }
 
         if (chunk.message.content) {
+          fullContent += chunk.message.content;
           const data = {
             id: chatId,
             object: "chat.completion.chunk",
             created: Math.floor(Date.now() / 1000),
             model: MODEL_NAME,
-            choices: [
-              {
-                index: 0,
-                delta: {
-                  content: chunk.message.content
-                },
-                finish_reason: null
-              }
-            ]
+            choices: [{ index: 0, delta: { content: chunk.message.content }, finish_reason: null }]
           };
           res.write(`data: ${JSON.stringify(data)}\n\n`);
         }
@@ -73,13 +79,7 @@ app.post("/v1/chat/completions", async (req, res) => {
             object: "chat.completion.chunk",
             created: Math.floor(Date.now() / 1000),
             model: MODEL_NAME,
-            choices: [
-              {
-                index: 0,
-                delta: {},
-                finish_reason: "stop"
-              }
-            ]
+            choices: [{ index: 0, delta: {}, finish_reason: "stop" }]
           };
           res.write(`data: ${JSON.stringify(finalData)}\n\n`);
         }
@@ -88,9 +88,13 @@ app.post("/v1/chat/completions", async (req, res) => {
       res.write("data: [DONE]\n\n");
       res.end();
 
-      // Update memory after streaming finishes
-      await addMessage("default", { role: 'user', content: userQuery });
-      await addMessage("default", { role: 'assistant', content: fullContent });
+      // Update memory in background, don't let it crash the stream if it fails
+      try {
+        await addMessage("default", { role: 'user', content: userQuery });
+        await addMessage("default", { role: 'assistant', content: fullContent });
+      } catch (dbErr) {
+        console.error("Delayed Memory Update Error:", dbErr);
+      }
       return;
     }
 
