@@ -1,6 +1,6 @@
 const express = require("express");
 const { orchestrate, prepareOrchestration } = require("./lib/orchestrator");
-const { updateActivity } = require("./lib/idle");
+const { updateActivity, startRequest, endRequest } = require("./lib/idle");
 const { ensureModel, decisionOllama, choiceOllama, DECISION_MODEL, CHOICE_MODEL, getChoiceStream } = require("./lib/ollama");
 const { addMessage } = require("./lib/db");
 require("dotenv").config();
@@ -35,7 +35,7 @@ app.post("/v1/chat/completions", async (req, res) => {
       return res.status(400).json({ error: "Invalid request: messages must be an array" });
     }
 
-    updateActivity();
+    startRequest();
 
     if (stream) {
       const { messagesForChoice, userQuery } = await prepareOrchestration(messages);
@@ -51,8 +51,6 @@ app.post("/v1/chat/completions", async (req, res) => {
       let firstChunk = true;
 
       for await (const chunk of streamResponse) {
-        updateActivity();
-
         const data = {
           id: chatId,
           object: "chat.completion.chunk",
@@ -127,6 +125,8 @@ app.post("/v1/chat/completions", async (req, res) => {
       res.write("data: [DONE]\n\n");
       res.end();
     }
+  } finally {
+    endRequest();
   }
 });
 
