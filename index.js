@@ -1,7 +1,8 @@
 const express = require("express");
-const { orchestrate } = require("./lib/orchestrator");
+const { orchestrate, prepareOrchestration } = require("./lib/orchestrator");
 const { updateActivity } = require("./lib/idle");
-const { ensureModel, decisionOllama, choiceOllama, DECISION_MODEL, CHOICE_MODEL } = require("./lib/ollama");
+const { ensureModel, decisionOllama, choiceOllama, DECISION_MODEL, CHOICE_MODEL, getChoiceStream } = require("./lib/ollama");
+const { addMessage } = require("./lib/db");
 require("dotenv").config();
 
 const app = express();
@@ -30,11 +31,48 @@ app.post("/v1/chat/completions", async (req, res) => {
   try {
     const { messages, stream } = req.body;
 
+    updateActivity();
+
     if (stream) {
-      return res.status(400).json({ error: "Streaming not yet supported in this implementation." });
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+
+      const { messagesForChoice, userQuery } = await prepareOrchestration(messages);
+      const streamResponse = await getChoiceStream(messagesForChoice);
+
+      let fullContent = "";
+      const chatId = `chatcmpl-${Date.now()}`;
+
+      for await (const chunk of streamResponse) {
+        fullContent += chunk.message.content;
+        const data = {
+          id: chatId,
+          object: "chat.completion.chunk",
+          created: Math.floor(Date.now() / 1000),
+          model: MODEL_NAME,
+          choices: [
+            {
+              index: 0,
+              delta: {
+                content: chunk.message.content
+              },
+              finish_reason: chunk.done ? "stop" : null
+            }
+          ]
+        };
+        res.write(`data: ${JSON.stringify(data)}\n\n`);
+      }
+
+      res.write("data: [DONE]\n\n");
+      res.end();
+
+      // Update memory after streaming finishes
+      await addMessage("default", { role: 'user', content: userQuery });
+      await addMessage("default", { role: 'assistant', content: fullContent });
+      return;
     }
 
-    updateActivity();
     const response = await orchestrate(messages);
 
     // Format to OpenAI standard
@@ -62,7 +100,12 @@ app.post("/v1/chat/completions", async (req, res) => {
 
   } catch (err) {
     console.error("API Error:", err);
-    res.status(500).json({ error: "Internal Server Error", message: err.message });
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Internal Server Error", message: err.message });
+    } else {
+      res.write(`data: ${JSON.stringify({ error: "Stream error", message: err.message })}\n\n`);
+      res.end();
+    }
   }
 });
 
