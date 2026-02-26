@@ -47,8 +47,6 @@ app.post("/v1/chat/completions", async (req, res) => {
       let firstChunk = true;
 
       for await (const chunk of streamResponse) {
-        updateActivity();
-
         if (firstChunk) {
           const roleData = {
             id: chatId,
