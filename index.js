@@ -37,13 +37,14 @@ app.post("/v1/chat/completions", async (req, res) => {
 
     startRequest();
 
-    if (stream) {
-      const { messagesForChoice, userQuery } = await prepareOrchestration(messages);
+    const { messagesForChoice, userQuery } = await prepareOrchestration(messages);
 
+    if (stream) {
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
 
+      console.log(`[Stream] Starting choice generation with ${CHOICE_MODEL}...`);
       const streamResponse = await getChoiceStream(messagesForChoice);
 
       let fullContent = "";
@@ -73,7 +74,7 @@ app.post("/v1/chat/completions", async (req, res) => {
       res.write("data: [DONE]\n\n");
       res.end();
 
-      // Update memory in background, don't let it crash the stream if it fails
+      // Update memory in background
       try {
         await addMessage("default", { role: 'user', content: userQuery });
         await addMessage("default", { role: 'assistant', content: fullContent });
@@ -113,7 +114,6 @@ app.post("/v1/chat/completions", async (req, res) => {
     if (!res.headersSent) {
       res.status(500).json({ error: "Internal Server Error", message: err.message });
     } else {
-      // In a stream, we can't change status code, but we can send an error chunk or just end
       const errorData = {
         error: {
           message: err.message,
