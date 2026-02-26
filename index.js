@@ -28,15 +28,7 @@ app.get("/v1/models", (req, res) => {
 
 // OpenAI Compatible Endpoint
 app.post("/v1/chat/completions", async (req, res) => {
-  const abortController = new AbortController();
-
-  // Abort orchestration if the client disconnects
-  res.on('close', () => {
-    console.log("[API] Client disconnected. Aborting orchestration...");
-    abortController.abort();
-    endRequest();
-  });
-
+  const chatId = `chatcmpl-${Date.now()}`;
   try {
     const { messages, stream } = req.body;
 
@@ -46,24 +38,32 @@ app.post("/v1/chat/completions", async (req, res) => {
 
     startRequest();
 
-    const { messagesForChoice, userQuery } = await prepareOrchestration(messages, abortController.signal);
-
     if (stream) {
+      // 1. Send headers immediately to prevent timeouts
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
 
+      // 2. Send initial role chunk to open the stream
+      const initialData = {
+        id: chatId,
+        object: "chat.completion.chunk",
+        created: Math.floor(Date.now() / 1000),
+        model: MODEL_NAME,
+        choices: [{ index: 0, delta: { role: "assistant" }, finish_reason: null }]
+      };
+      res.write(`data: ${JSON.stringify(initialData)}\n\n`);
+
+      // 3. Perform heavy orchestration while connection is open
+      const { messagesForChoice, userQuery } = await prepareOrchestration(messages);
+
       console.log(`[Stream] Starting choice generation with ${CHOICE_MODEL}...`);
-      const streamResponse = await getChoiceStream(messagesForChoice, abortController.signal);
+      const streamResponse = await getChoiceStream(messagesForChoice);
 
       let fullContent = "";
-      const chatId = `chatcmpl-${Date.now()}`;
       let firstChunk = true;
 
       for await (const chunk of streamResponse) {
-        // If the request was aborted during the stream, break the loop
-        if (abortController.signal.aborted) break;
-
         const data = {
           id: chatId,
           object: "chat.completion.chunk",
@@ -72,7 +72,7 @@ app.post("/v1/chat/completions", async (req, res) => {
           choices: [
             {
               index: 0,
-              delta: firstChunk ? { role: "assistant", content: chunk.message.content || "" } : { content: chunk.message.content || "" },
+              delta: { content: chunk.message.content || "" },
               finish_reason: chunk.done ? "stop" : null
             }
           ]
@@ -80,29 +80,26 @@ app.post("/v1/chat/completions", async (req, res) => {
 
         res.write(`data: ${JSON.stringify(data)}\n\n`);
         fullContent += (chunk.message.content || "");
-        firstChunk = false;
       }
 
-      if (!abortController.signal.aborted) {
-        res.write("data: [DONE]\n\n");
-        res.end();
-      }
+      res.write("data: [DONE]\n\n");
+      res.end();
 
       // Update memory in background
       try {
         await addMessage("default", { role: 'user', content: userQuery });
-        await addMessage("assistant", { role: 'assistant', content: fullContent });
+        await addMessage("default", { role: 'assistant', content: fullContent });
       } catch (dbErr) {
         console.error("Delayed Memory Update Error:", dbErr);
       }
       return;
     }
 
-    const response = await orchestrate(messages, abortController.signal);
+    const response = await orchestrate(messages);
 
     // Format to OpenAI standard
     res.json({
-      id: `chatcmpl-${Date.now()}`,
+      id: chatId,
       object: "chat.completion",
       created: Math.floor(Date.now() / 1000),
       model: MODEL_NAME,
@@ -129,11 +126,15 @@ app.post("/v1/chat/completions", async (req, res) => {
       res.status(500).json({ error: "Internal Server Error", message: err.message });
     } else {
       const errorData = {
-        error: {
-          message: err.message,
-          type: "internal_error",
-          code: "stream_error"
-        }
+        id: chatId,
+        object: "chat.completion.chunk",
+        created: Math.floor(Date.now() / 1000),
+        model: MODEL_NAME,
+        choices: [{
+          index: 0,
+          delta: { content: `\n\n[API Error]: ${err.message}` },
+          finish_reason: "error"
+        }]
       };
       res.write(`data: ${JSON.stringify(errorData)}\n\n`);
       res.write("data: [DONE]\n\n");
