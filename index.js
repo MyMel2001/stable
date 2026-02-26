@@ -28,6 +28,15 @@ app.get("/v1/models", (req, res) => {
 
 // OpenAI Compatible Endpoint
 app.post("/v1/chat/completions", async (req, res) => {
+  const abortController = new AbortController();
+
+  // Abort orchestration if the client disconnects
+  res.on('close', () => {
+    console.log("[API] Client disconnected. Aborting orchestration...");
+    abortController.abort();
+    endRequest();
+  });
+
   try {
     const { messages, stream } = req.body;
 
@@ -37,7 +46,7 @@ app.post("/v1/chat/completions", async (req, res) => {
 
     startRequest();
 
-    const { messagesForChoice, userQuery } = await prepareOrchestration(messages);
+    const { messagesForChoice, userQuery } = await prepareOrchestration(messages, abortController.signal);
 
     if (stream) {
       res.setHeader('Content-Type', 'text/event-stream');
@@ -45,13 +54,16 @@ app.post("/v1/chat/completions", async (req, res) => {
       res.setHeader('Connection', 'keep-alive');
 
       console.log(`[Stream] Starting choice generation with ${CHOICE_MODEL}...`);
-      const streamResponse = await getChoiceStream(messagesForChoice);
+      const streamResponse = await getChoiceStream(messagesForChoice, abortController.signal);
 
       let fullContent = "";
       const chatId = `chatcmpl-${Date.now()}`;
       let firstChunk = true;
 
       for await (const chunk of streamResponse) {
+        // If the request was aborted during the stream, break the loop
+        if (abortController.signal.aborted) break;
+
         const data = {
           id: chatId,
           object: "chat.completion.chunk",
@@ -71,20 +83,22 @@ app.post("/v1/chat/completions", async (req, res) => {
         firstChunk = false;
       }
 
-      res.write("data: [DONE]\n\n");
-      res.end();
+      if (!abortController.signal.aborted) {
+        res.write("data: [DONE]\n\n");
+        res.end();
+      }
 
       // Update memory in background
       try {
         await addMessage("default", { role: 'user', content: userQuery });
-        await addMessage("default", { role: 'assistant', content: fullContent });
+        await addMessage("assistant", { role: 'assistant', content: fullContent });
       } catch (dbErr) {
         console.error("Delayed Memory Update Error:", dbErr);
       }
       return;
     }
 
-    const response = await orchestrate(messages);
+    const response = await orchestrate(messages, abortController.signal);
 
     // Format to OpenAI standard
     res.json({
