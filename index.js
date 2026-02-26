@@ -31,6 +31,10 @@ app.post("/v1/chat/completions", async (req, res) => {
   try {
     const { messages, stream } = req.body;
 
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: "Invalid request: messages must be an array" });
+    }
+
     updateActivity();
 
     if (stream) {
