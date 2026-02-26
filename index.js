@@ -45,23 +45,44 @@ app.post("/v1/chat/completions", async (req, res) => {
       const chatId = `chatcmpl-${Date.now()}`;
 
       for await (const chunk of streamResponse) {
+        updateActivity(); // Keep-alive for idle timer while generating
         fullContent += chunk.message.content;
-        const data = {
-          id: chatId,
-          object: "chat.completion.chunk",
-          created: Math.floor(Date.now() / 1000),
-          model: MODEL_NAME,
-          choices: [
-            {
-              index: 0,
-              delta: {
-                content: chunk.message.content
-              },
-              finish_reason: chunk.done ? "stop" : null
-            }
-          ]
-        };
-        res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+        if (chunk.message.content) {
+          const data = {
+            id: chatId,
+            object: "chat.completion.chunk",
+            created: Math.floor(Date.now() / 1000),
+            model: MODEL_NAME,
+            choices: [
+              {
+                index: 0,
+                delta: {
+                  content: chunk.message.content
+                },
+                finish_reason: null
+              }
+            ]
+          };
+          res.write(`data: ${JSON.stringify(data)}\n\n`);
+        }
+
+        if (chunk.done) {
+          const finalData = {
+            id: chatId,
+            object: "chat.completion.chunk",
+            created: Math.floor(Date.now() / 1000),
+            model: MODEL_NAME,
+            choices: [
+              {
+                index: 0,
+                delta: {},
+                finish_reason: "stop"
+              }
+            ]
+          };
+          res.write(`data: ${JSON.stringify(finalData)}\n\n`);
+        }
       }
 
       res.write("data: [DONE]\n\n");
@@ -103,7 +124,16 @@ app.post("/v1/chat/completions", async (req, res) => {
     if (!res.headersSent) {
       res.status(500).json({ error: "Internal Server Error", message: err.message });
     } else {
-      res.write(`data: ${JSON.stringify({ error: "Stream error", message: err.message })}\n\n`);
+      // In a stream, we can't change status code, but we can send an error chunk or just end
+      const errorData = {
+        error: {
+          message: err.message,
+          type: "internal_error",
+          code: "stream_error"
+        }
+      };
+      res.write(`data: ${JSON.stringify(errorData)}\n\n`);
+      res.write("data: [DONE]\n\n");
       res.end();
     }
   }
