@@ -62,15 +62,15 @@ app.post("/v1/chat/completions", async (req, res) => {
       }, 5000);
 
       try {
-        // 4. Perform heavy orchestration
-        const { messagesForChoice, userQuery } = await prepareOrchestration(messages);
+        // 4. Perform heavy orchestration (Best of N)
+        const response = await orchestrate(messages);
         clearInterval(heartbeat);
 
-        console.log(`[Stream] Starting choice generation with ${CHOICE_MODEL}...`);
-        const streamResponse = await getChoiceStream(messagesForChoice);
-
-        let fullContent = "";
-        for await (const chunk of streamResponse) {
+        const fullContent = response.message.content;
+        // OpenAI-like chunking: send in smaller pieces to simulate streaming
+        const chunkSize = 20;
+        for (let i = 0; i < fullContent.length; i += chunkSize) {
+          const chunk = fullContent.slice(i, i + chunkSize);
           const data = {
             id: chatId,
             object: "chat.completion.chunk",
@@ -79,26 +79,18 @@ app.post("/v1/chat/completions", async (req, res) => {
             choices: [
               {
                 index: 0,
-                delta: { content: chunk.message.content || "" },
-                finish_reason: chunk.done ? "stop" : null
+                delta: { content: chunk },
+                finish_reason: (i + chunkSize >= fullContent.length) ? "stop" : null
               }
             ]
           };
-
           res.write(`data: ${JSON.stringify(data)}\n\n`);
-          fullContent += (chunk.message.content || "");
+          // Small delay to make it look like streaming
+          await new Promise(resolve => setTimeout(resolve, 5));
         }
 
         res.write("data: [DONE]\n\n");
         res.end();
-
-        // Update memory in background
-        try {
-          await addMessage("default", { role: 'user', content: userQuery });
-          await addMessage("default", { role: 'assistant', content: fullContent });
-        } catch (dbErr) {
-          console.error("Delayed Memory Update Error:", dbErr);
-        }
       } catch (innerErr) {
         clearInterval(heartbeat);
         throw innerErr;

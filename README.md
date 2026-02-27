@@ -27,6 +27,7 @@ Stable runs on a **dual-model architecture** to separate high-level reasoning fr
 -   **Search Subsystem**: Parallelized Wikipedia and DuckDuckGo integration for real-time fact-checking.
 -   **Idle Kernel**: A background scheduler that performs "sleep-time" tasks like memory consolidation and self-correction when the user is inactive.
 -   **Streaming SSE Engine**: A robust Server-Sent Events implementation compatible with OpenAI-style clients (like `open-webui`), featuring a heartbeat system to maintain connections during heavy reasoning tasks.
+-   **Parallel Best-of-N Selection**: Dynamically generates multiple candidate responses in parallel based on available VRAM and uses the Decision Model to select the best one, significantly improving output quality.
 
 ## 🚀 Getting Started
 
@@ -61,9 +62,16 @@ node index.js
     -   The Brain extracts intent from text and images.
     -   Web information is fetched if the Brain determines current knowledge is insufficient.
     -   Identity, Memory, and Search results are injected into a unified "context block."
-3.  **Choice Generation**: The Choice model generates a response using the augmented context.
-4.  **Memory Persistence**: The exchange is recorded in the SQLite-backed "long-term memory."
-5.  **Idle Processing**: After a random period (30m to 2h) of inactivity, the system runs background tasks to consolidate memory and optimize long-term data structures.
+3.  **Choice Generation**: The Choice model generates multiple candidate responses in parallel (Best-of-N). The number of candidates is determined by the available VRAM.
+4.  **Selection**: The Brain evaluates all candidates and selects the most optimal response.
+5.  **Memory Persistence**: The exchange is recorded in the SQLite-backed "long-term memory."
+6.  **Idle Processing**: After a random period (30m to 2h) of inactivity, the system runs background tasks to consolidate memory and optimize long-term data structures.
+
+## 🎛️ Performance Tuning
+
+Stable automatically optimizes itself for your hardware:
+- **Parallelism**: Ensure `OLLAMA_NUM_PARALLEL` is set in your Ollama environment (e.g., `OLLAMA_NUM_PARALLEL=4`) to take full advantage of Best-of-N generation.
+- **VRAM Awareness**: Stable checks available VRAM to determine how many parallel generations it can safely handle without swapping.
 
 ---
 *"Stable is not a chatbot; it is a foundation for persistent, autonomous intelligence."*
