@@ -44,53 +44,64 @@ app.post("/v1/chat/completions", async (req, res) => {
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
 
-      // 2. Send initial role chunk to open the stream
+      // 2. Send initial role+empty content chunk to fully satisfy OpenAI pattern match
       const initialData = {
         id: chatId,
         object: "chat.completion.chunk",
         created: Math.floor(Date.now() / 1000),
         model: MODEL_NAME,
-        choices: [{ index: 0, delta: { role: "assistant" }, finish_reason: null }]
+        choices: [{ index: 0, delta: { role: "assistant", content: "" }, finish_reason: null }]
       };
       res.write(`data: ${JSON.stringify(initialData)}\n\n`);
 
-      // 3. Perform heavy orchestration while connection is open
-      const { messagesForChoice, userQuery } = await prepareOrchestration(messages);
+      // 3. Keep-alive heartbeat loop while orchestration is thinking
+      const heartbeat = setInterval(() => {
+        if (!res.writableEnded) {
+          res.write(': keep-alive\n\n');
+        }
+      }, 5000);
 
-      console.log(`[Stream] Starting choice generation with ${CHOICE_MODEL}...`);
-      const streamResponse = await getChoiceStream(messagesForChoice);
-
-      let fullContent = "";
-      let firstChunk = true;
-
-      for await (const chunk of streamResponse) {
-        const data = {
-          id: chatId,
-          object: "chat.completion.chunk",
-          created: Math.floor(Date.now() / 1000),
-          model: MODEL_NAME,
-          choices: [
-            {
-              index: 0,
-              delta: { content: chunk.message.content || "" },
-              finish_reason: chunk.done ? "stop" : null
-            }
-          ]
-        };
-
-        res.write(`data: ${JSON.stringify(data)}\n\n`);
-        fullContent += (chunk.message.content || "");
-      }
-
-      res.write("data: [DONE]\n\n");
-      res.end();
-
-      // Update memory in background
       try {
-        await addMessage("default", { role: 'user', content: userQuery });
-        await addMessage("default", { role: 'assistant', content: fullContent });
-      } catch (dbErr) {
-        console.error("Delayed Memory Update Error:", dbErr);
+        // 4. Perform heavy orchestration
+        const { messagesForChoice, userQuery } = await prepareOrchestration(messages);
+        clearInterval(heartbeat);
+
+        console.log(`[Stream] Starting choice generation with ${CHOICE_MODEL}...`);
+        const streamResponse = await getChoiceStream(messagesForChoice);
+
+        let fullContent = "";
+        for await (const chunk of streamResponse) {
+          const data = {
+            id: chatId,
+            object: "chat.completion.chunk",
+            created: Math.floor(Date.now() / 1000),
+            model: MODEL_NAME,
+            choices: [
+              {
+                index: 0,
+                delta: { content: chunk.message.content || "" },
+                finish_reason: chunk.done ? "stop" : null
+              }
+            ]
+          };
+
+          res.write(`data: ${JSON.stringify(data)}\n\n`);
+          fullContent += (chunk.message.content || "");
+        }
+
+        res.write("data: [DONE]\n\n");
+        res.end();
+
+        // Update memory in background
+        try {
+          await addMessage("default", { role: 'user', content: userQuery });
+          await addMessage("default", { role: 'assistant', content: fullContent });
+        } catch (dbErr) {
+          console.error("Delayed Memory Update Error:", dbErr);
+        }
+      } catch (innerErr) {
+        clearInterval(heartbeat);
+        throw innerErr;
       }
       return;
     }
@@ -133,7 +144,7 @@ app.post("/v1/chat/completions", async (req, res) => {
         choices: [{
           index: 0,
           delta: { content: `\n\n[API Error]: ${err.message}` },
-          finish_reason: "error"
+          finish_reason: "stop"
         }]
       };
       res.write(`data: ${JSON.stringify(errorData)}\n\n`);
