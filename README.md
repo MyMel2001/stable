@@ -11,6 +11,7 @@ Contrary to popular belief, AGI is not a simulation of a human. It is a function
 -   **Emotion**: Rational decision-making and goal achievement are entirely independent of biological "feelings."
 -   **Subjective Understanding**: An intelligence does not need a "spark" of consciousness or internal "qualia" to process information and derive correct conclusions.
 -   **A Physical Body**: Intelligence is substrate-independent. The ability to interact with digital information, APIs, and the sum of human knowledge is a valid and complete domain for general intelligence.
+-   **Be actually able to "do the thing"**: AGI is about *intelligence, not ability.*
 -   **Anything that isn't Intelligence**: AGI is the automation of pure logic, pattern recognition, and data synthesis, unburdened by human-like heuristics or anthropomorphic constraints.
 
 Stable provides the fundamental "cognitive services" required for this intelligence: identity reinforcement, long-term memory persistence, external knowledge retrieval (search), and idle-time background processing.
