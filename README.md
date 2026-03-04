@@ -44,8 +44,8 @@ Stable runs on a **dual-model architecture** to separate high-level reasoning fr
    ```
 3. Configure your "Models" in `.env`:
    ```env
-   DECISION_MODEL=sparksammy/glm-4.7-flash-unsloth:tinyer-hotfixed
-   CHOICE_MODEL=qwen3-vl:4b
+   DECISION_MODEL=sparksammy/gpt-oss-20b-unsloth:small-hotfixed
+   CHOICE_MODEL=ministral-3:8b
    OLLAMA_HOST_DECISION=http://localhost:11434
    OLLAMA_HOST_CHOICE=http://localhost:11434
    PORT=5481
