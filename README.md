@@ -44,10 +44,10 @@ Stable runs on a **dual-model architecture** to separate high-level reasoning fr
    ```
 3. Configure your "Models" in `.env`:
    ```env
-   DECISION_MODEL=sparksammy/gpt-oss-20b-unsloth:small-hotfixed
-   CHOICE_MODEL=ministral-3:8b
-   OLLAMA_HOST_DECISION=http://localhost:11434
-   OLLAMA_HOST_CHOICE=http://localhost:11434
+   DECISION_MODEL=deepseek-r1:14b
+   CHOICE_MODEL=qwen3.5:9b
+   OLLAMA_HOST_DECISION=http://192.168.50.42:11434
+   OLLAMA_HOST_CHOICE=http://0.0.0.0:11434
    PORT=5481
    MODEL_NAME=stable
    LIBREY_INSTANCE=https://search.sparksammy.com
