@@ -2,10 +2,6 @@
 
 Stable is a minimum viable implementation of Artificial General Intelligence (AGI). It is designed with a "barebones" philosophy—providing the essential cognitive architecture required for autonomous reasoning, long-term persistence, and environment interaction without the bloat of traditional "assistant" frameworks.
 
-## WARNING!
-
-This system can access and store web content. Do NOT run without monitoring. Scraping may violate site terms. Experimental — high risk if extended with tools.
-
 ## 🧠 The Nature of AGI
 
 Stable is built on the premise that **Artificial General Intelligence is pure intelligence.**
