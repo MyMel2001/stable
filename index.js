@@ -1,8 +1,11 @@
 const express = require("express");
 const { orchestrate, prepareOrchestration } = require("./lib/orchestrator");
 const { updateActivity, startRequest, endRequest } = require("./lib/idle");
-const { ensureModel, decisionOllama, choiceOllama, DECISION_MODEL, CHOICE_MODEL, getChoiceStream } = require("./lib/ollama");
+const { getProvider } = require("./lib/provider-selector");
 const { addMessage } = require("./lib/db");
+require("dotenv").config();
+
+const provider = getProvider();
 require("dotenv").config();
 
 const app = express();
@@ -10,6 +13,8 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 const MODEL_NAME = process.env.MODEL_NAME || "stable-unified";
+const DECISION_MODEL = process.env.DECISION_MODEL || "llama3.1:70b";
+const CHOICE_MODEL = process.env.CHOICE_MODEL || "llama3.1:70b";
 
 // OpenAI Compatible Models Endpoint
 app.get("/v1/models", (req, res) => {
@@ -24,6 +29,11 @@ app.get("/v1/models", (req, res) => {
       }
     ]
   });
+});
+
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.json({ status: "ok" });
 });
 
 // OpenAI Compatible Endpoint
@@ -154,6 +164,5 @@ app.listen(PORT, async () => {
   console.log(`Choice Model: ${CHOICE_MODEL}`);
 
   // Ensure models are available on startup
-  await ensureModel(decisionOllama, DECISION_MODEL);
-  await ensureModel(choiceOllama, CHOICE_MODEL);
+  await provider.isAvailable();
 });
