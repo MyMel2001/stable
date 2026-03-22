@@ -19,6 +19,7 @@
     "express": "^5.2.1",
     "jsdom": "^28.1.0",
     "ollama": "^0.6.3",
+    "openai": "^6.32.0",
     "quick.db": "^9.1.7",
     "turndown": "^7.2.2",
     "undici": "^7.22.0"
