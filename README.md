@@ -1,6 +1,6 @@
 # Stable: A Barebones AGI
 
-Stable is a minimum viable implementation of Artificial General Intelligence (AGI). It is designed with a "barebones" philosophy—providing the essential cognitive architecture required for autonomous reasoning, long-term persistence, and environment interaction without the bloat of traditional "assistant" frameworks.
+Stable is a minimum viable implementation of Artificial General Intelligence (AGI). It is designed with a "barebones" philosophy—providing the essential cognitive architecture required for autonomous reasoning, long-term persistence, and environment interaction without the bloat of traditional "assistant" frameworks. **_Pro tip: Use SpecialRouter to route between models._**
 
 ## 🧠 The Nature of AGI
 
