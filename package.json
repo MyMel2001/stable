@@ -10,7 +10,7 @@
   "author": "",
   "license": "SEE LICENSE IN LICENSE",
   "type": "commonjs",
-  "dependencies": {
+    "dependencies": {
     "@mozilla/readability": "^0.6.0",
     "axios": "^1.13.5",
     "better-sqlite3": "^12.6.2",
