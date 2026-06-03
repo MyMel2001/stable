@@ -6,15 +6,12 @@ const { addMessage } = require("./lib/db");
 require("dotenv").config();
 
 const provider = getProvider();
-require("dotenv").config();
 
 const app = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 const MODEL_NAME = process.env.MODEL_NAME || "stable-unified";
-const DECISION_MODEL = process.env.DECISION_MODEL || "llama3.1:70b";
-const CHOICE_MODEL = process.env.CHOICE_MODEL || "llama3.1:70b";
 
 // OpenAI Compatible Models Endpoint
 app.get("/v1/models", (req, res) => {
@@ -160,8 +157,8 @@ app.post("/v1/chat/completions", async (req, res) => {
 
 app.listen(PORT, async () => {
   console.log(`Stable API running on port ${PORT}`);
-  console.log(`Decision Model: ${DECISION_MODEL}`);
-  console.log(`Choice Model: ${CHOICE_MODEL}`);
+  console.log(`Decision Model: ${provider.decisionModel}`);
+  console.log(`Choice Model: ${provider.choiceModel}`);
 
   // Ensure models are available on startup
   await provider.isAvailable();
