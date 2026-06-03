@@ -79,6 +79,7 @@ node index.js
 Stable automatically optimizes itself for your hardware:
 
 - **Parallelism**: Ensure `OLLAMA_NUM_PARALLEL` is set in your Ollama environment (e.g., `OLLAMA_NUM_PARALLEL=4`) to take full advantage of Best-of-N generation.
+- **OpenAI Parallelism**: Set `OPENAI_NUM_PARALLEL` in your `.env` (e.g., `OPENAI_NUM_PARALLEL=4`) to control the number of parallel candidate responses when using the OpenAI provider. When set, this overrides the VRAM-based calculation.
 - **VRAM Awareness**: Stable checks available VRAM to determine how many parallel generations it can safely handle without swapping.
 
 ---
